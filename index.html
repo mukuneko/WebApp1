@@ -2,26 +2,72 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>カメラアプリサンプル</title>
+    <title>カメラ切り替えアプリ</title>
     <style>
         body { text-align: center; background: #f0f0f0; }
         video { width: 80%; max-width: 600px; margin-top: 20px; border: 2px solid #333; }
+        select { margin-top: 20px; font-size: 1.2em; }
     </style>
 </head>
 <body>
-    <h1>カメラアプリサンプル</h1>
+    <h1>カメラ切り替えアプリ</h1>
+    <select id="cameraSelect"></select>
+    <br>
     <video id="camera" autoplay playsinline></video>
 
     <script>
         const video = document.getElementById('camera');
+        const cameraSelect = document.getElementById('cameraSelect');
+        let currentStream;
 
-        navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-            .then(stream => {
-                video.srcObject = stream;
-            })
-            .catch(err => {
-                alert("カメラにアクセスできませんでした: " + err);
+        // カメラリスト取得とセレクトボックス生成
+        async function getCameras() {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(device => device.kind === 'videoinput');
+            
+            cameraSelect.innerHTML = '';
+            videoDevices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.text = device.label || `カメラ${cameraSelect.length + 1}`;
+                cameraSelect.appendChild(option);
             });
+        }
+
+        // 選択したカメラで起動
+        async function startCamera(deviceId) {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+
+            const constraints = {
+                video: {
+                    deviceId: deviceId ? { exact: deviceId } : undefined
+                },
+                audio: false
+            };
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                currentStream = stream;
+            } catch (err) {
+                alert("カメラにアクセスできません：" + err);
+            }
+        }
+
+        // カメラ選択時の動作
+        cameraSelect.onchange = () => {
+            startCamera(cameraSelect.value);
+        };
+
+        // 初期処理
+        (async () => {
+            await getCameras();
+            if (cameraSelect.options.length > 0) {
+                startCamera(cameraSelect.value);
+            }
+        })();
     </script>
 </body>
 </html>
