@@ -2,25 +2,29 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>カメラ切り替えアプリ</title>
+    <title>QRコード読み取り＆カメラ切り替え</title>
     <style>
         body { text-align: center; background: #f0f0f0; }
         video { width: 80%; max-width: 600px; margin-top: 20px; border: 2px solid #333; }
-        select { margin-top: 20px; font-size: 1.2em; }
+        select, #result { margin-top: 20px; font-size: 1.2em; display: block; }
     </style>
 </head>
 <body>
-    <h1>カメラ切り替えアプリ</h1>
+    <h1>QRコード読み取り</h1>
     <select id="cameraSelect"></select>
-    <br>
     <video id="camera" autoplay playsinline></video>
+    <div id="result">QRコードを読み取ってください</div>
+
+    <!-- jsQRライブラリ読み込み -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
 
     <script>
         const video = document.getElementById('camera');
         const cameraSelect = document.getElementById('cameraSelect');
+        const resultDiv = document.getElementById('result');
         let currentStream;
+        let scanning = false;
 
-        // カメラリスト取得とセレクトボックス生成
         async function getCameras() {
             const devices = await navigator.mediaDevices.enumerateDevices();
             const videoDevices = devices.filter(device => device.kind === 'videoinput');
@@ -34,7 +38,6 @@
             });
         }
 
-        // 選択したカメラで起動
         async function startCamera(deviceId) {
             if (currentStream) {
                 currentStream.getTracks().forEach(track => track.stop());
@@ -51,17 +54,43 @@
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
                 currentStream = stream;
+
+                if (!scanning) {
+                    scanning = true;
+                    scanQRCode();
+                }
             } catch (err) {
                 alert("カメラにアクセスできません：" + err);
             }
         }
 
-        // カメラ選択時の動作
         cameraSelect.onchange = () => {
             startCamera(cameraSelect.value);
         };
 
-        // 初期処理
+        async function scanQRCode() {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+
+            function processFrame() {
+                if (!currentStream) return;
+
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+
+                const code = jsQR(imageData.data, imageData.width, imageData.height);
+                if (code) {
+                    resultDiv.textContent = `読み取り成功：${code.data}`;
+                } else {
+                    requestAnimationFrame(processFrame);
+                }
+            }
+
+            requestAnimationFrame(processFrame);
+        }
+
         (async () => {
             await getCameras();
             if (cameraSelect.options.length > 0) {
