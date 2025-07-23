@@ -9,6 +9,8 @@
         select, #result { margin-top: 20px; font-size: 1.2em; display: block; }
     </style>
 </head>
+
+
 <body>
     <h1>QRコード読み取り</h1>
     <select id="cameraSelect"></select>
@@ -19,84 +21,100 @@
     <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
 
     <script>
-        const video = document.getElementById('camera');
-        const cameraSelect = document.getElementById('cameraSelect');
-        const resultDiv = document.getElementById('result');
-        let currentStream;
-        let scanning = false;
+    const video = document.getElementById('camera');
+    const cameraSelect = document.getElementById('cameraSelect');
+    const resultDiv = document.getElementById('result');
+    let currentStream;
+    let scanning = false;
 
-        async function getCameras() {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const videoDevices = devices.filter(device => device.kind === 'videoinput');
-            
-            cameraSelect.innerHTML = '';
-            videoDevices.forEach(device => {
-                const option = document.createElement('option');
-                option.value = device.deviceId;
-                option.text = device.label || `カメラ${cameraSelect.length + 1}`;
-                cameraSelect.appendChild(option);
-            });
+    async function getCameras() {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        
+        cameraSelect.innerHTML = '';
+        videoDevices.forEach(device => {
+            const option = document.createElement('option');
+            option.value = device.deviceId;
+            option.text = device.label || `カメラ${cameraSelect.length + 1}`;
+            cameraSelect.appendChild(option);
+        });
+
+        console.log("カメラ一覧取得:", videoDevices);
+    }
+
+    async function startCamera(deviceId) {
+        if (currentStream) {
+            currentStream.getTracks().forEach(track => track.stop());
         }
 
-        async function startCamera(deviceId) {
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
-            }
-
-            const constraints = {
-                video: {
-                    deviceId: deviceId ? { exact: deviceId } : undefined
-                },
-                audio: false
-            };
-
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                video.srcObject = stream;
-                currentStream = stream;
-
-                if (!scanning) {
-                    scanning = true;
-                    scanQRCode();
-                }
-            } catch (err) {
-                alert("カメラにアクセスできません：" + err);
-            }
-        }
-
-        cameraSelect.onchange = () => {
-            startCamera(cameraSelect.value);
+        const constraints = {
+            video: {
+                deviceId: deviceId ? { exact: deviceId } : undefined
+            },
+            audio: false
         };
 
-        async function scanQRCode() {
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            console.log("カメラ起動成功:", deviceId);
+            video.srcObject = stream;
+            currentStream = stream;
 
-            function processFrame() {
-                if (!currentStream) return;
+            if (!scanning) {
+                scanning = true;
+                scanQRCode();
+            }
+        } catch (err) {
+            console.error("カメラにアクセスできません:", err);
+            alert("カメラにアクセスできません：" + err);
+        }
+    }
 
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    cameraSelect.onchange = () => {
+        console.log("カメラ変更:", cameraSelect.value);
+        startCamera(cameraSelect.value);
+    };
 
-                const code = jsQR(imageData.data, imageData.width, imageData.height);
-                if (code) {
-                    resultDiv.textContent = `読み取り成功：${code.data}`;
-                } else {
-                    requestAnimationFrame(processFrame);
-                }
+    async function scanQRCode() {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+
+        function processFrame() {
+            if (!currentStream) return;
+
+            if (video.videoWidth === 0 || video.videoHeight === 0) {
+                console.warn("videoサイズ未取得。次のフレームで再試行。");
+                requestAnimationFrame(processFrame);
+                return;
             }
 
-            requestAnimationFrame(processFrame);
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+            if (code) {
+                console.log("✅ QRコード検出成功:", code.data);
+                resultDiv.textContent = `読み取り成功：${code.data}`;
+            } else {
+                console.log("❌ QRコード未検出（フレームを継続）");
+                requestAnimationFrame(processFrame);
+            }
         }
 
-        (async () => {
-            await getCameras();
-            if (cameraSelect.options.length > 0) {
-                startCamera(cameraSelect.value);
-            }
-        })();
-    </script>
+        requestAnimationFrame(processFrame);
+    }
+
+    (async () => {
+        await getCameras();
+        if (cameraSelect.options.length > 0) {
+            console.log("初期カメラ起動:", cameraSelect.value);
+            startCamera(cameraSelect.value);
+        } else {
+            console.warn("カメラが見つかりませんでした。");
+        }
+    })();
+</script>
 </body>
 </html>
