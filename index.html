@@ -1,120 +1,115 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>QRコード読み取り切り替え</title>
-  <style>
-    body { text-align: center; background: #f0f0f0; }
-    video { width: 80%; max-width: 600px; margin-top: 20px; border: 2px solid #333; }
-    select, #result, #scanBtn { margin-top: 20px; font-size: 1.2em; display: block; }
-    #scanBtn { padding: 10px 20px; font-size: 1.2em; }
-  </style>
+    <meta charset="UTF-8">
+    <title>QRコード読み取り＆カメラ切り替え</title>
+    <style>
+        body { text-align: center; background: #f0f0f0; }
+        video { width: 80%; max-width: 600px; margin-top: 20px; border: 2px solid #333; }
+        select, #result, #scanBtn { margin-top: 20px; font-size: 1.2em; display: block; }
+        #scanBtn { padding: 10px 20px; font-size: 1.2em; }
+    </style>
 </head>
 <body>
-  <h1>QRコード読み取り</h1>
+    <h1>QRコード読み取り</h1>
+    <select id="cameraSelect"></select>
+    <video id="camera" autoplay playsinline></video>
+    <button id="scanBtn">📷 QRコードを読み取る</button>
+    <div id="result">QRコードを読み取ってください</div>
 
-  <label>カメラ選択</label>
-  <select id="cameraSelect"></select>
+    <!-- 音声ファイル -->
+    <audio id="shutterSound" src="shutter.mp3" preload="auto"></audio>
+    <audio id="successSound" src="success.mp3" preload="auto"></audio>
 
-  <label>ライブラリ選択</label>
-  <select id="librarySelect">
-    <option value="jsqr">jsQR（軽量）</option>
-    <option value="zxing">ZXing（高精度）</option>
-  </select>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
 
-  <video id="camera" autoplay playsinline></video>
-  <button id="scanBtn">📷 QRコードを読み取る</button>
-  <div id="result">QRコードを読み取ってください</div>
+    <script>
+        const video = document.getElementById('camera');
+        const cameraSelect = document.getElementById('cameraSelect');
+        const scanBtn = document.getElementById('scanBtn');
+        const resultDiv = document.getElementById('result');
+        const shutterSound = document.getElementById('shutterSound');
+        const successSound = document.getElementById('successSound');
+        let currentStream;
 
-  <!-- ライブラリ読み込み -->
-  <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
-  <script type="module">
-    import { BrowserMultiFormatReader } from 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.0.10/esm/index.min.js';
-
-    const video = document.getElementById('camera');
-    const cameraSelect = document.getElementById('cameraSelect');
-    const librarySelect = document.getElementById('librarySelect');
-    const scanBtn = document.getElementById('scanBtn');
-    const resultDiv = document.getElementById('result');
-
-    let currentStream;
-
-    async function getCameras() {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoDevices = devices.filter(device => device.kind === 'videoinput');
-      cameraSelect.innerHTML = '';
-      videoDevices.forEach(device => {
-        const option = document.createElement('option');
-        option.value = device.deviceId;
-        option.text = device.label || `カメラ${cameraSelect.length + 1}`;
-        cameraSelect.appendChild(option);
-      });
-    }
-
-    async function startCamera(deviceId) {
-      if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop());
-      }
-
-      const constraints = {
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          deviceId: deviceId ? { exact: deviceId } : undefined
-        },
-        audio: false
-      };
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        video.srcObject = stream;
-        currentStream = stream;
-      } catch (err) {
-        alert("カメラにアクセスできません：" + err);
-      }
-    }
-
-    cameraSelect.onchange = () => {
-      startCamera(cameraSelect.value);
-    };
-
-    scanBtn.onclick = async () => {
-      const library = librarySelect.value;
-
-      if (library === 'jsqr') {
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
-        if (code) {
-          resultDiv.textContent = `jsQR 読み取り成功：${code.data}`;
-        } else {
-          resultDiv.textContent = "jsQR 読み取り失敗";
+        async function getCameras() {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(device => device.kind === 'videoinput');
+            cameraSelect.innerHTML = '';
+            videoDevices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.text = device.label || `カメラ${cameraSelect.length + 1}`;
+                cameraSelect.appendChild(option);
+            });
+            console.log("カメラ一覧:", videoDevices);
         }
 
-      } else if (library === 'zxing') {
-        const zxingReader = new BrowserMultiFormatReader();
-        try {
-          const result = await zxingReader.decodeOnceFromVideoElement(video);
-          resultDiv.textContent = `ZXing 読み取り成功：${result.text}`;
-        } catch (err) {
-          resultDiv.textContent = "ZXing 読み取り失敗";
-        }
-      }
-    };
+        async function startCamera(deviceId) {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
 
-    // 初期化処理
-    (async () => {
-      await getCameras();
-      if (cameraSelect.options.length > 0) {
-        startCamera(cameraSelect.value);
-      }
-    })();
-  </script>
+            const constraints = {
+                video: {
+                    deviceId: deviceId ? { exact: deviceId } : undefined
+                },
+                audio: false
+            };
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                currentStream = stream;
+                console.log("カメラ起動成功");
+            } catch (err) {
+                console.error("カメラ起動失敗:", err);
+                alert("カメラにアクセスできません：" + err);
+            }
+        }
+
+        cameraSelect.onchange = () => {
+            startCamera(cameraSelect.value);
+        };
+
+        scanBtn.onclick = () => {
+            shutterSound.currentTime = 0;
+            shutterSound.play();
+            scanOnce();
+        };
+
+        async function scanOnce() {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+
+            if (!video.videoWidth || !video.videoHeight) {
+                resultDiv.textContent = "カメラ映像が準備できていません。";
+                return;
+            }
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+            if (code) {
+                console.log("✅ QRコード検出:", code.data);
+                successSound.currentTime = 0;
+                successSound.play();
+                resultDiv.textContent = `読み取り成功：${code.data}`;
+            } else {
+                console.log("❌ QRコード未検出");
+                resultDiv.textContent = "QRコードが読み取れませんでした。";
+            }
+        }
+
+        (async () => {
+            await getCameras();
+            if (cameraSelect.options.length > 0) {
+                startCamera(cameraSelect.value);
+            }
+        })();
+    </script>
 </body>
 </html>
