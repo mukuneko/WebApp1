@@ -17,6 +17,10 @@
     <button id="scanBtn">📷 QRコードを読み取る</button>
     <div id="result">QRコードを読み取ってください</div>
 
+    <!-- 音声ファイル -->
+    <audio id="shutterSound" src="shutter.mp3" preload="auto"></audio>
+    <audio id="successSound" src="success.mp3" preload="auto"></audio>
+
     <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
 
     <script>
@@ -24,6 +28,8 @@
         const cameraSelect = document.getElementById('cameraSelect');
         const scanBtn = document.getElementById('scanBtn');
         const resultDiv = document.getElementById('result');
+        const shutterSound = document.getElementById('shutterSound');
+        const successSound = document.getElementById('successSound');
         let currentStream;
 
         async function getCameras() {
@@ -67,6 +73,8 @@
         };
 
         scanBtn.onclick = () => {
+            shutterSound.currentTime = 0;
+            shutterSound.play();
             scanOnce();
         };
 
@@ -87,6 +95,8 @@
 
             if (code) {
                 console.log("✅ QRコード検出:", code.data);
+                successSound.currentTime = 0;
+                successSound.play();
                 resultDiv.textContent = `読み取り成功：${code.data}`;
             } else {
                 console.log("❌ QRコード未検出");
